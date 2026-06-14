@@ -18,6 +18,7 @@ from common_lib.utils import generate_random_string
 load_dotenv()
 
 
+# TODO: replace with pydantic-setting package
 class BaseSetting:
     """Base Setting class"""
 
