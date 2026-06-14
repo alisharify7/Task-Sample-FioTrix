@@ -9,10 +9,12 @@ services:
   web:
     container_name: web
     hostname: web
-    restart: always #-> on-failure
+    restart: always
     build:
       context: .
       dockerfile: ./dockerfiles/app.Dockerfile
+    environment:
+      DATABASE_HOST: postgres
     ports:
       - "8000:8000"
     depends_on:
@@ -29,6 +31,7 @@ services:
     restart: always
     environment:
       POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-root}"
+      DATABASE_HOST: postgres
     networks:
       - internal_proxy
     volumes:
@@ -42,8 +45,10 @@ services:
     restart: on-failure
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: ./dockerfiles/app.Dockerfile
     command: [ "bash", "./scripts/setup_migration.sh" ] # setup db and load backup data
+    environment:
+      DATABASE_HOST: postgres
     depends_on:
       - postgres
     networks:
@@ -57,7 +62,7 @@ services:
     restart: on-failure
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: ./dockerfiles/app.Dockerfile
     command: [ "bash", "./scripts/run_tests.sh" ]
     depends_on:
       - setup_migration
