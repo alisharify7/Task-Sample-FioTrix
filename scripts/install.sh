@@ -94,23 +94,6 @@ setup_docker_compose() {
 }
 
 # ------------------------- PostgreSQL / systemd -------------------------
-install_postgres() {
-    local os="$1"
-    echo "Installing PostgreSQL..."
-    case "$os" in
-        ubuntu|debian)
-            sudo apt-get update && sudo apt-get install -y postgresql postgresql-contrib
-            ;;
-        fedora|centos|rhel)
-            sudo dnf install -y postgresql-server postgresql-contrib || sudo yum install -y postgresql-server postgresql-contrib
-            sudo postgresql-setup --initdb
-            sudo systemctl start postgresql
-            sudo systemctl enable postgresql
-            ;;
-        *) echo "Unsupported OS. Please install PostgreSQL manually." && return 1 ;;
-    esac
-    echo "PostgreSQL installed."
-}
 
 create_db_user() {
     local username="$1"
@@ -166,15 +149,9 @@ setup_systemd() {
     fi
     # PostgreSQL check
     if ! command_exists psql; then
-        echo "PostgreSQL is not installed."
-        if ask_yes_no "Would you like to install PostgreSQL now?"; then
-            install_postgres "$(detect_os)" || error_exit "PostgreSQL installation failed."
-        else
-            error_exit "PostgreSQL is required. Exiting."
-        fi
-    else
-        echo "PostgreSQL is already installed."
+        error_exit "PostgreSQL is not installed."
     fi
+
 
     # --- 2. Move project to /opt/task-service ---
     local PROJECT_SRC="$(pwd)"
