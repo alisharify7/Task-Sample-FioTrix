@@ -32,9 +32,7 @@ def create_app(config_class: object) -> FastAPI:
     add_pagination(app)
 
     for router in urlpatterns:
-        app.include_router(
-            router["router"], prefix=router["prefix"], tags=router["tags"]
-        )
+        app.include_router(router["router"], prefix=router["prefix"], tags=router["tags"])
 
     return app
 

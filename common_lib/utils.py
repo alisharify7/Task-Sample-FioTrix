@@ -12,6 +12,7 @@ import string
 
 SysRandom = random.SystemRandom()
 
+
 def generate_random_string(length: int = 6, punctuation: bool = True) -> str:
     """generate strong random strings
 
@@ -29,4 +30,3 @@ def generate_random_string(length: int = 6, punctuation: bool = True) -> str:
     random_string = SysRandom.choices(letters, k=length)
 
     return "".join(random_string)
-

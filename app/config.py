@@ -12,6 +12,7 @@ import pathlib
 from pathlib import Path
 
 from dotenv import load_dotenv
+
 from common_lib.utils import generate_random_string
 
 load_dotenv()
@@ -38,9 +39,7 @@ class BaseSetting:
     API_SUMMERY: str = os.environ.get("API_SUMMERY", "")
     API_DESCRIPTION: str = os.environ.get("API_DESCRIPTION", "")
     API_TERM_URL: str = os.environ.get("API_TERM", "/term")
-    API_BASE_URL: str = (
-        f"/{os.environ.get('API_BASE_URL', 'api')}/v{API_SHORT_VERSION}/"
-    )
+    API_BASE_URL: str = f"/{os.environ.get('API_BASE_URL', 'api')}/v{API_SHORT_VERSION}/"
 
     # database config
     DATABASE_NAME: str = os.environ.get("DATABASE_NAME", "")
