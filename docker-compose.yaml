@@ -1,1 +1,84 @@
-# keep
+volumes:
+  pg-data:
+  pgadmin-data:
+
+networks:
+  internal_proxy:
+
+services:
+  web:
+    container_name: web
+    hostname: web
+    restart: always #-> on-failure
+    build:
+      context: .
+      dockerfile: ./dockerfiles/app.Dockerfile
+    ports:
+      - "8000:8000"
+    depends_on:
+      - run_tests
+    networks:
+      - internal_proxy
+    env_file:
+      - .env
+
+  postgres:
+    image: 'docker.arvancloud.ir/postgres:${POSTGRES_TAG_VERSION:-latest}'
+    container_name: postgres
+    hostname: postgres
+    restart: always
+    environment:
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-root}"
+    networks:
+      - internal_proxy
+    volumes:
+      - pg-data:/var/lib/postgresql/data/
+    env_file:
+      - .env
+
+  setup_migration:
+    container_name: setup_migration
+    hostname: setup_migration
+    restart: on-failure
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: [ "bash", "./scripts/setup_migration.sh" ] # setup db and load backup data
+    depends_on:
+      - postgres
+    networks:
+      - internal_proxy
+    env_file:
+      - .env
+
+  run_tests:
+    container_name: run_tests
+    hostname: run_tests
+    restart: on-failure
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: [ "bash", "./scripts/run_tests.sh" ]
+    depends_on:
+      - setup_migration
+    networks:
+      - internal_proxy
+    env_file:
+      - .env
+
+  postgres_pgadmin:
+    image: 'docker.arvancloud.ir/dpage/pgadmin4:${PGADMIN_TAG_VERSION:-latest}'
+    container_name: postgres_pgadmin
+    hostname: postgres_pgadmin
+    restart: always
+    ports:
+      - "9001:80"
+    environment:
+      PGADMIN_DEFAULT_EMAIL: "${PGADMIN_DEFAULT_EMAIL:-default@example.com}"
+      PGADMIN_DEFAULT_PASSWORD: "${PGADMIN_DEFAULT_PASSWORD:-password}"
+    networks:
+      - internal_proxy
+    volumes:
+      - pgadmin-data:/var/lib/pgadmin/
+    env_file:
+      - .env
