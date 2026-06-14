@@ -106,7 +106,7 @@ class Development(Setting):
         return self.__str__()
 
 
-def get_config(debug: bool = BaseSetting.DEBUG) -> object:
+def get_config(debug: bool = BaseSetting.DEBUG) -> BaseSetting:
     """Getting config setting class base on `environment` status.
     :return: object
     :rtype: object
