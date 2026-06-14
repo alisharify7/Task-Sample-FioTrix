@@ -7,7 +7,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from app.database import get_session
 from app.models import Task
-from app.routers import task_router
+from app.routers.tasks import task_router
 from app.schemas import CreateTaskSchem, DetailTaskSchem, ListTaskSchem, UpdateTaskSchem
 
 
