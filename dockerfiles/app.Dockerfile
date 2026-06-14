@@ -13,7 +13,7 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 COPY . /app/
 COPY ./pyproject.toml /app/pyproject.toml
 
-RUN apt update && apt instal curl -y
+RUN apt update && apt install curl -y
 RUN uv sync --verbose
 
 # TODO: create custom user and run app with related permissions
