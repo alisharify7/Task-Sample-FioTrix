@@ -1,248 +1,239 @@
-#!/usr/bin/env bash
+#!/bin/bash
 
-# -----------------------------------------------------------------------------
-# Deployment script for FastAPI app (Docker Compose vs. systemd with PostgreSQL)
-# -----------------------------------------------------------------------------
+set -euo pipefail
 
-set -e  # exit on error
+print_banner() {
+    echo "==========================================================="
+    echo " FastAPI Deployment Script - For Fiotrix Job Interview Task"
+    echo "==========================================================="
+}
 
-# Colors for output
-RED='\033[0;31m'
-GREEN='\'\033[0;32m'
-YELLOW='\033[1;33m'
-NC='\033[0m' # No Color
+error_exit() {
+    echo "ERROR: $1" >&2
+    exit 1
+}
 
-# Helper: print colored messages
-info() { echo -e "${GREEN}[INFO]${NC} $1"; }
-warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
-error() { echo -e "${RED}[ERROR]${NC} $1"; }
+# Check if a command exists
+command_exists() {
+    command -v "$1" &>/dev/null
+}
 
-# -----------------------------------------------------------------------------
-# Docker Compose section
-# -----------------------------------------------------------------------------
-check_docker() {
-    if command -v docker &> /dev/null; then
-        info "Docker found."
-        return 0
+# Ask a yes/no question, returns 0 for yes, 1 for no
+ask_yes_no() {
+    local prompt="$1"
+    local answer
+    while true; do
+        read -r -p "$prompt (y/n): " answer
+        case "$answer" in
+            [Yy]* ) return 0 ;;
+            [Nn]* ) return 1 ;;
+            * ) echo "Please answer yes or no." ;;
+        esac
+    done
+}
+
+# Detect Linux distribution (basic)
+detect_os() {
+    if [ -f /etc/os-release ]; then
+        . /etc/os-release
+        echo "$ID"
     else
-        warn "Docker is not installed."
-        return 1
+        echo "unknown"
     fi
 }
 
-check_docker_compose() {
-    if command -v docker-compose &> /dev/null || docker compose version &> /dev/null; then
-        info "Docker Compose found."
-        return 0
-    else
-        warn "Docker Compose is not installed."
-        return 1
-    fi
-}
+# ------------------------------------------------------------
+# Docker / Docker Compose functions
+# ------------------------------------------------------------
+install_docker() {
+    local os="$1"
+    echo "Installing Docker and Docker Compose..."
 
-ask_install_docker() {
-    echo -e "${YELLOW}Docker is required but not installed.${NC}"
-    read -p "Do you want to install Docker now? (y/n) " -n 1 -r
-    echo
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
-        # Detect OS and provide installation command (supports Debian/Ubuntu)
-        if [[ -f /etc/debian_version ]]; then
-            info "Installing Docker on Debian/Ubuntu..."
-            sudo apt update
-            sudo apt install -y apt-transport-https ca-certificates curl software-properties-common
-            curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
-            echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-            sudo apt update
-            sudo apt install -y docker-ce docker-ce-cli containerd.io
-            sudo systemctl enable docker
+    case "$os" in
+        ubuntu|debian)
+            sudo apt-get update
+            sudo apt-get install -y docker.io docker-compose-v2 || {
+                # Fallback if docker-compose-v2 package not available
+                sudo apt-get install -y docker.io
+                sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+                sudo chmod +x /usr/local/bin/docker-compose
+            }
+            ;;
+        fedora|centos|rhel)
+            sudo dnf install -y docker docker-compose || sudo yum install -y docker docker-compose
             sudo systemctl start docker
-            sudo usermod -aG docker $USER
-            info "Docker installed. Please log out and back in for group changes to take effect."
-        else
-            error "Automatic installation only supported on Debian/Ubuntu. Please install Docker manually: https://docs.docker.com/engine/install/"
-            exit 1
-        fi
-        # Also install docker-compose plugin
-        sudo apt install -y docker-compose-plugin || true
-    else
-        error "Docker is required. Exiting."
-        exit 1
-    fi
+            sudo systemctl enable docker
+            ;;
+        *)
+            echo "Unsupported OS. Please install Docker and Docker Compose manually."
+            echo "Visit https://docs.docker.com/engine/install/ and https://docs.docker.com/compose/install/"
+            return 1
+            ;;
+    esac
+
+    # Add current user to docker group to avoid needing sudo
+    sudo usermod -aG docker "$USER"
+    echo "Docker installed. You may need to log out and back in for group changes to take effect."
 }
 
 run_docker_compose() {
-    # According to spec: just print "running docker compose up"
-    # but we also actually run it (optional). For exact spec:
-    echo "running docker compose up"
-    # Uncomment next line to actually start the containers:
-    # docker compose up -d
+    echo "Running docker compose up..."
+    docker compose up -d
+    echo "all container's are up and running "
 }
 
-deploy_docker_compose() {
-    info "Deploying with Docker Compose..."
-    if ! check_docker; then
-        ask_install_docker
+setup_docker_compose() {
+    echo "Checking Docker and Docker Compose..."
+
+    local need_install=0
+    if ! command_exists docker; then
+        echo "Docker is not installed."
+        need_install=1
     fi
-    if ! check_docker_compose; then
-        warn "Docker Compose missing, attempting to install plugin..."
-        sudo apt update && sudo apt install -y docker-compose-plugin || {
-            error "Could not install Docker Compose plugin. Please install manually."
-            exit 1
-        }
+
+    # Check for Docker Compose (both v2 and legacy)
+    if ! docker compose version &>/dev/null && ! command_exists docker-compose; then
+        echo "Docker Compose is not installed."
+        need_install=1
     fi
+
+    if [ $need_install -eq 1 ]; then
+        if ask_yes_no "Would you like to install Docker and Docker Compose now?"; then
+            install_docker "$(detect_os)" || error_exit "Installation failed."
+        else
+            error_exit "Docker and Docker Compose are required. Exiting."
+        fi
+    else
+        echo "Docker and Docker Compose are already installed."
+    fi
+
     run_docker_compose
 }
 
-# -----------------------------------------------------------------------------
-# Systemd with PostgreSQL section
-# -----------------------------------------------------------------------------
-check_postgres_installed() {
-    if command -v psql &> /dev/null; then
-        info "PostgreSQL client found."
-        return 0
-    else
-        warn "PostgreSQL is not installed."
-        return 1
-    fi
-}
+# ------------------------------------------------------------
+# PostgreSQL / Systemd functions
+# ------------------------------------------------------------
+install_postgres() {
+    local os="$1"
+    echo "Installing PostgreSQL..."
 
-ask_install_postgres() {
-    echo -e "${YELLOW}PostgreSQL is required but not installed.${NC}"
-    read -p "Do you want to install PostgreSQL now? (y/n) " -n 1 -r
-    echo
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
-        if [[ -f /etc/debian_version ]]; then
-            info "Installing PostgreSQL on Debian/Ubuntu..."
-            sudo apt update
-            sudo apt install -y postgresql postgresql-contrib
-            sudo systemctl enable postgresql
-            sudo systemctl start postgresql
-            info "PostgreSQL installed and started."
-        else
-            error "Automatic installation only supported on Debian/Ubuntu. Please install PostgreSQL manually."
-            exit 1
-        fi
-    else
-        error "PostgreSQL is required. Exiting."
-        exit 1
-    fi
-}
-
-create_postgres_user() {
-    local pg_user pg_pass
-    read -p "Enter PostgreSQL username (new or existing): " pg_user
-    read -s -p "Enter password for user '$pg_user': " pg_pass
-    echo
-    # Check if user already exists
-    if sudo -u postgres psql -tAc "SELECT 1 FROM pg_roles WHERE rolname='$pg_user'" | grep -q 1; then
-        info "User '$pg_user' already exists. Updating password..."
-        sudo -u postgres psql -c "ALTER USER \"$pg_user\" WITH PASSWORD '$pg_pass';"
-    else
-        info "Creating PostgreSQL user '$pg_user'..."
-        sudo -u postgres psql -c "CREATE USER \"$pg_user\" WITH PASSWORD '$pg_pass';"
-    fi
-    # Grant necessary privileges (e.g., CREATEDB for future migrations)
-    sudo -u postgres psql -c "ALTER USER \"$pg_user\" WITH CREATEDB;"
-    info "User '$pg_user' created/updated with CREATEDB privilege."
-}
-
-extract_db_name_from_env() {
-    local env_file=".env"
-    if [[ ! -f "$env_file" ]]; then
-        error ".env file not found in current directory. Please ensure DATABASE_NAME is defined."
-        exit 1
-    fi
-    # Extract DATABASE_NAME, ignore comments and trim spaces
-    db_name=$(grep -E '^DATABASE_NAME=' "$env_file" | cut -d '=' -f2- | xargs)
-    if [[ -z "$db_name" ]]; then
-        error "DATABASE_NAME not defined in .env file."
-        exit 1
-    fi
-    echo "$db_name"
-}
-
-create_database() {
-    local db_name=$1
-    local pg_user=$2
-    info "Creating database '$db_name'..."
-    # Check if database exists
-    if sudo -u postgres psql -lqt | cut -d \| -f 1 | grep -qw "$db_name"; then
-        warn "Database '$db_name' already exists. Skipping creation."
-    else
-        sudo -u postgres psql -c "CREATE DATABASE \"$db_name\" OWNER \"$pg_user\";"
-        info "Database '$db_name' created with owner '$pg_user'."
-    fi
-}
-
-copy_systemd_service() {
-    local service_file="./systemd/task.service"
-    if [[ ! -f "$service_file" ]]; then
-        error "Service file $service_file not found. Please ensure it exists."
-        exit 1
-    fi
-    info "Copying service file to /etc/systemd/system/task.service"
-    sudo cp "$service_file" /etc/systemd/system/
-    sudo chmod 644 /etc/systemd/system/task.service
-}
-
-reload_and_start_systemd() {
-    info "Reloading systemd daemon..."
-    sudo systemctl daemon-reload
-    info "Enabling task.service to start on boot..."
-    sudo systemctl enable task.service
-    info "Starting task.service..."
-    sudo systemctl start task.service
-    info "Service status:"
-    sudo systemctl status task.service --no-pager || {
-        warn "Service failed to start. Check logs with: journalctl -u task.service"
-    }
-}
-
-deploy_systemd() {
-    info "Deploying with systemd and PostgreSQL..."
-    if ! check_postgres_installed; then
-        ask_install_postgres
-    fi
-    create_postgres_user
-    # Capture the username for DB creation
-    # (we need the username that was just set; we can prompt again or store it)
-    # Simpler: reuse the variable from create_postgres_user, but that function is interactive.
-    # We'll call create_postgres_user and then ask the user to provide the same username again,
-    # or we can refactor to return the username. For simplicity, we prompt again for the username
-    # because the function already printed it. Alternatively, we can read the username from a temp file.
-    # Let's just ask the user for the username again.
-    read -p "Please enter the PostgreSQL username you just created (for database owner): " pg_user
-    db_name=$(extract_db_name_from_env)
-    create_database "$db_name" "$pg_user"
-    copy_systemd_service
-    reload_and_start_systemd
-}
-
-# -----------------------------------------------------------------------------
-# Main menu
-# -----------------------------------------------------------------------------
-main() {
-    echo "========================================"
-    echo "  FastAPI App Deployment"
-    echo "========================================"
-    echo "Choose deployment method:"
-    echo "  1) Docker Compose"
-    echo "  2) System service (systemd + PostgreSQL)"
-    read -p "Enter your choice [1 or 2]: " choice
-
-    case "$choice" in
-        1)
-            deploy_docker_compose
+    case "$os" in
+        ubuntu|debian)
+            sudo apt-get update
+            sudo apt-get install -y postgresql postgresql-contrib
             ;;
-        2)
-            deploy_systemd
+        fedora|centos|rhel)
+            sudo dnf install -y postgresql-server postgresql-contrib || sudo yum install -y postgresql-server postgresql-contrib
+            sudo postgresql-setup --initdb
+            sudo systemctl start postgresql
+            sudo systemctl enable postgresql
             ;;
         *)
-            error "Invalid choice. Please run the script again and select 1 or 2."
-            exit 1
+            echo "Unsupported OS. Please install PostgreSQL manually."
+            return 1
             ;;
     esac
+
+    echo "PostgreSQL installed successfully."
 }
 
-# Run the main function
-main
+create_db_user() {
+    local username="$1"
+    local password="$2"
+
+    echo "Creating PostgreSQL user '$username'..."
+    # Using psql with proper escaping for the password
+    sudo -u postgres psql -c "CREATE USER \"$username\" WITH PASSWORD '$(echo "$password" | sed "s/'/''/g")';" \
+        || error_exit "Failed to create user '$username'."
+    echo "User '$username' created."
+}
+
+create_db() {
+    # Extract DATABASE_NAME from .env file
+    if [ ! -f .env ]; then
+        error_exit ".env file not found in current directory."
+    fi
+
+    local db_name
+    db_name=$(grep -E '^DATABASE_NAME=' .env | cut -d '=' -f2-)
+    if [ -z "$db_name" ]; then
+        error_exit "DATABASE_NAME not found in .env file."
+    fi
+
+    echo "Creating database '$db_name'..."
+    sudo -u postgres createdb -O "$1" "$db_name" || {
+        # Fallback using psql
+        sudo -u postgres psql -c "CREATE DATABASE \"$db_name\" OWNER \"$1\";" || error_exit "Failed to create database '$db_name'."
+    }
+    echo "Database '$db_name' created with owner '$1'."
+}
+
+copy_and_enable_service() {
+    local service_file="./systemd/task.service"
+    if [ ! -f "$service_file" ]; then
+        error_exit "Service file '$service_file' not found."
+    fi
+
+    echo "Copying $service_file to /etc/systemd/system/task.service..."
+    sudo cp "$service_file" /etc/systemd/system/task.service
+
+    echo "Reloading systemd and starting task.service..."
+    sudo systemctl daemon-reload
+    sudo systemctl enable task.service
+    sudo systemctl start task.service
+
+    echo "Service task.service is now running."
+}
+
+setup_systemd() {
+    echo "Checking PostgreSQL..."
+
+    if ! command_exists psql; then
+        echo "PostgreSQL is not installed."
+        if ask_yes_no "Would you like to install PostgreSQL now?"; then
+            install_postgres "$(detect_os)" || error_exit "Installation failed."
+        else
+            error_exit "PostgreSQL is required. Exiting."
+        fi
+    else
+        echo "PostgreSQL is already installed."
+    fi
+
+    # Ask for database credentials
+    echo
+    echo "Please provide the PostgreSQL user credentials for your application."
+    read -r -p "Username: " db_username
+    read -r -s -p "Password: " db_password
+    echo  # newline after hidden input
+
+    create_db_user "$db_username" "$db_password"
+    create_db "$db_username"
+    copy_and_enable_service
+}
+
+# ------------------------------------------------------------
+# Main script
+# ------------------------------------------------------------
+main() {
+    print_banner
+    if ask_yes_no "do you create the .env file in the root of project?"; then
+        echo "Good. let go to next steep ..."
+    else
+        error_exit ".env is required please create file using cp env.sample .env and fill up required fileds."
+    fi
+    echo "Choose deployment method:"
+    echo "1) Docker Compose"
+    echo "2) Systemd Service"
+    read -r -p "Enter choice (1/2): " choice
+
+    case "$choice" in
+        1) setup_docker_compose ;;
+        2) setup_systemd ;;
+        *) error_exit "Invalid option. Run the script again and choose 1 or 2." ;;
+    esac
+
+    echo
+    echo "Deployment setup complete!"
+}
+
+main "$@"
