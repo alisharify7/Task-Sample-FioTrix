@@ -33,8 +33,10 @@ sudo ./scripts/install.sh
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/alisharify7/Task-Sample-FioTrix/main/scripts/install.sh -o install.sh && sudo bash install.sh
-Docker (production ready)
-bash
+```
+
+#### Docker (production ready)
+```bash
 docker compose up --build
 ```
 
