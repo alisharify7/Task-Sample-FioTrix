@@ -6,9 +6,9 @@ echo "🚀 Migrating changes to Database"
 echo "🚀 Starting server..."
 if [ "$DEBUG" != "True" ]; then
     echo "🏗️ Production mode - Using Gunicorn"
-    #    uvicorn app
+    uvicorn main:app --worker 4
 else
     echo "🔧 Development mode - Using development server"
     #    uvicorn app
-    uv run fastapi --dev
+    uv run fastapi dev --reaload --port 8000
 fi

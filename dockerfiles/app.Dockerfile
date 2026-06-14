@@ -14,7 +14,7 @@ COPY . /app/
 COPY ./pyproject.toml /app/pyproject.toml
 
 RUN apt update && apt install curl -y
-RUN uv sync --verbose
+RUN uv sync --dev --verbose
 
 # TODO: create custom user and run app with related permissions
 EXPOSE 8000
