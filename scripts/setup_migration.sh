@@ -9,5 +9,5 @@ echo "⏳ Waiting for Postgres to be ready..."
 ./wait-for-it.sh $DATABASE_HOST:$DATABASE_PORT --timeout=30 --strict -- echo "✅ Postgres is ready."
 
 echo "🚀 Running FastAPI migrations..."
-# alembic config
+alembic upgrade head
 echo "✅ Migrations applied successfully."
