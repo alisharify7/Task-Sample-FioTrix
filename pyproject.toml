@@ -1,0 +1,45 @@
+[project]
+name = "task-sample-fiotrix"
+version = "0.1.0"
+description = "simple task management fastapi application for job interview"
+requires-python = ">=3.14"
+package-mode = false
+
+
+dependencies = [
+    "alembic>=1.18.4",
+    "asyncpg>=0.31.0",
+    "fastapi>=0.136.3",
+    "pre-commit>=4.6.0",
+    "pydantic>=2.13.4",
+    "python-decouple>=3.8",
+    "sqlalchemy>=2.0.50",
+]
+
+[dependency-groups]
+dev = [
+    "black>=26.5.1",
+    "ipython>=9.14.1",
+]
+
+[[tool.uv.index]]
+name = "dev-needs-mirror"
+url = "https://pypi.devneeds.ir/simple/"
+# url = "https://pypi.org/simple/" #uncomment this if repo is not working
+default = true
+
+[tool.isort]
+profile = "black"
+line_length = 99
+multi_line_output = 3
+force_grid_wrap = 0
+use_parentheses = true
+skip_glob = ["*.pyc", "__pycache__/*"]
+
+[tool.black]
+line-length = 99
+
+[tool.coverage.run]
+branch = true
+source = ["."]
+# parallel = true  # Uncomment if needed
