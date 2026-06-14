@@ -8,13 +8,14 @@
 """
 
 import datetime
+from typing import Union
 
 from pydantic import BaseModel
 
 
 class CreateTaskSchem(BaseModel):
     title: str
-    description: str | None  # Union[str, None]
+    description: Union[str, None]  # Union[str, None]
 
 
 class DetailTaskSchem(BaseModel):
@@ -23,3 +24,17 @@ class DetailTaskSchem(BaseModel):
     description: str | None  # Union[str, None]
     is_complete: bool
     created_at: datetime.datetime
+
+
+class ListTaskSchem(BaseModel):
+    id: int
+    title: str
+    description: str | None  # Union[str, None]
+    is_complete: bool
+    created_at: datetime.datetime
+
+
+class UpdateTaskSchem(BaseModel):
+    title: str
+    description: str | None  # Union[str, None]
+    is_complete: bool
