@@ -25,7 +25,6 @@ class BaseModel(BaseModelClass):
 
     __abstract__ = True
     id: so.Mapped[int] = so.mapped_column(sa.BigInteger(), primary_key=True)
-
     created_at: so.Mapped[typing.Optional[datetime.datetime]] = so.mapped_column(
         sa.TIMESTAMP(timezone=True),  # Add timezone support
         default=lambda: datetime.datetime.now(datetime.UTC),
@@ -104,6 +103,6 @@ class BaseModel(BaseModelClass):
 
 class Task(BaseModel):
     __tablename__ = BaseModel.set_table_name("tasks")
-    title: so.Mapped[str] = so.mapped_column(sa.String(), nullable=False)
-    description: so.Mapped[str] = so.mapped_column(sa.String(), nullable=True)
+    title: so.Mapped[str] = so.mapped_column(sa.String(512), nullable=False)
+    description: so.Mapped[str] = so.mapped_column(sa.String(1024), nullable=True)
     is_complete: so.Mapped[bool] = so.mapped_column(sa.Boolean(), nullable=False, default=False)
